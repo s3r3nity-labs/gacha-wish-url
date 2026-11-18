@@ -1,0 +1,8 @@
+# Binaries
+/gacha-wish-url
+/dist/
+
+# Test and coverage output
+*.test
+*.out
+
