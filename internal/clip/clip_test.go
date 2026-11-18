@@ -3,7 +3,10 @@ package clip
 import (
 	"bytes"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 func fake(env map[string]string, tools ...string) Env {
@@ -72,5 +75,30 @@ func TestCopyFallsBackToTheTerminal(t *testing.T) {
 func TestCopyWithNothingAvailable(t *testing.T) {
 	if _, err := fake(map[string]string{}).Copy("x", nil); err == nil {
 		t.Error("no error without any way to copy")
+	}
+}
+
+// wl-copy forks a process that keeps the clipboard alive and inherits stdout/stderr.
+// run must return when the program itself exits, not wait for that process.
+func TestRunDoesNotWaitForTheProcessKeepingTheClipboard(t *testing.T) {
+	got := filepath.Join(t.TempDir(), "clipboard")
+	start := time.Now()
+
+	err := run([]string{"sh", "-c", `cat > "$0"; sleep 5 &`, got}, "hello")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("waited %v for the background process", d)
+	}
+	if data, _ := os.ReadFile(got); string(data) != "hello" {
+		t.Errorf("program got %q on stdin", data)
+	}
+}
+
+func TestRunReportsFailure(t *testing.T) {
+	if err := run([]string{"sh", "-c", "exit 3"}, "x"); err == nil {
+		t.Error("exit status 3 not reported")
 	}
 }
