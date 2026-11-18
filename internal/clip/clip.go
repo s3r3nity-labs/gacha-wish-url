@@ -62,10 +62,8 @@ func (e Env) Copy(text string, tty io.Writer) (Method, error) {
 			}
 			return m, nil
 		}
-		cmd := exec.Command(m.Cmd[0], m.Cmd[1:]...)
-		cmd.Stdin = strings.NewReader(text)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w %s", m.Name, err, strings.TrimSpace(string(out))))
+		if err := run(m.Cmd, text); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", m.Name, err))
 			continue
 		}
 		return m, nil
@@ -74,6 +72,18 @@ func (e Env) Copy(text string, tty io.Writer) (Method, error) {
 		errs = append(errs, errors.New("no clipboard tool (wl-copy, xclip, xsel) and no terminal"))
 	}
 	return Method{}, errors.Join(errs...)
+}
+
+// run starts a clipboard program with text on stdin and waits until it exits. Its output
+// goes to /dev/null on purpose: wl-copy and xclip leave a process behind that keeps the
+// clipboard alive, and it inherits stdout/stderr. Capturing the output would wait for
+// that process to close them, i.e. until something else is copied (the tool would hang).
+func run(command []string, text string) error {
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Stdin = strings.NewReader(text)
+	cmd.Stdout = nil // /dev/null
+	cmd.Stderr = nil
+	return cmd.Run()
 }
 
 // OSC52 is the escape sequence asking the terminal to put text into the clipboard.
